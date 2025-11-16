@@ -1,0 +1,379 @@
+
+theorem minmax_lnz {H : History} {a : Nat × Value} :
+  a ∈ H.minmax ->
+  (H.linearizable ↔ (H.rmv_val a.1).linearizable) := by
+  intro am
+  apply Iff.intro
+  · intro ⟨s, hl, hs⟩
+    use (s.filter (fun e => e.2 ≠ a.1))
+    simp[linearization]
+    apply And.intro
+    · let J := @Lnz_filter s (fun n => !decide (n = a.1)) _ hl
+      simp at J
+      exact J
+    · let Q := @seq_filter H s (fun n => n ≠ a.1) _ hs
+      simp at Q
+      simp[History.rmv_val]
+      exact Q
+  · intro ⟨s, hl, hs⟩
+    simp[
+      History.minmax, AssocMap.mem_inter_iff,
+      History.mem_minimal_iff, History.mem_maximal_iff] at am
+    obtain ⟨⟨aH, amin⟩, ⟨_, amax⟩⟩ := am
+    simp[History.linearizable]
+    use ↡a.1 :: s ++ [↟ a.1]
+    unfold linearization
+    simp
+    apply And.intro
+    · apply @Lnz.push_pop a.1 s [] hl Lnz.nil (by simp)
+    · obtain ⟨Hs, Hswf⟩ := hs
+      unfold sequentialization
+      apply And.intro
+      · rw[← @perm_rmv_add H a s aH]
+        exact Hs
+      · simp[History.replace_evt_cons]
+        have hget : H.getItv? { lb := label.add, val := a.1 } = a.2.add := by
+          simp[History.getItv?, Option.bind_eq_some_iff]
+          use a.2
+        simp[hget]
+        apply And.intro
+        · intro a'
+          simp[History.replace_evt_itv]
+          intro mm; cases mm with
+          | inl mm =>
+              obtain ⟨⟨bl, bv⟩, bs, bget⟩ := mm
+              simp[History.getItv?, Option.bind_eq_some_iff] at bget
+              obtain ⟨bvl, bget, beq⟩ := bget
+              simp[·≼·]
+              cases blv : bl with
+              | add =>
+                  simp[blv] at beq
+                  subst beq
+                  exact amin _ _ bget
+              | rmv =>
+                  simp[blv] at beq
+                  subst beq
+                  calc a.2.add.a ≤ bvl.add.b := by exact amin _ _ bget
+                        _ ≤ bvl.rmv.a := by exact Int.le_of_lt bvl.wf
+                        _ ≤ bvl.rmv.b := by exact Int.le_of_lt bvl.rmv.ab
+          | inr mm =>
+            simp[History.getItv?, Option.bind_eq_some_iff] at mm
+            obtain ⟨a', a'get, a'eq⟩ := mm
+            subst a'eq
+            simp[·≼·]
+            let Q := AssocMap.mem_inj H aH a'get
+            rw[← Q]
+            calc a.2.add.a ≤ a.2.add.b := by exact Int.le_of_lt a.2.add.ab
+                  _ ≤ a.2.rmv.a := Int.le_of_lt a.2.wf
+                  _ ≤ a.2.rmv.b := by exact Int.le_of_lt a.2.rmv.ab
+        · simp[
+            History.replace_evt_append,
+            List.pairwise_append
+          ]
+          let nm := remove_perm_not_mem Hs
+          let Q := @remove_not_in_evts H a.1 s nm
+          simp[Q] at Hswf
+          simp[Hswf]
+          simp[History.replace_evt_itv, pairwise_filterMap]
+          intro b ev evs getev c cget
+          simp[·≼·]
+          -- TODO: Add useful lemmas about getItv?.. This repeating is annoying
+          simp[History.getItv?, Option.bind_eq_some_iff] at getev cget
+          obtain ⟨bv, bget, beq⟩ := getev
+          obtain ⟨cv, cget, ceq⟩ := cget
+          have cveq := AssocMap.mem_inj _ cget aH
+          subst cveq
+          subst ceq
+          cases evlb : ev.lb with
+          | add =>
+              simp[evlb] at beq
+              subst beq
+              calc bv.add.a ≤ bv.add.b := by exact Int.le_of_lt bv.add.ab
+                    _ ≤ bv.rmv.a := by exact Int.le_of_lt bv.wf
+                    _ ≤ a.2.rmv.b := by exact amax _ _ bget
+          | rmv =>
+              simp[evlb] at beq
+              subst beq
+              exact amax _ _ bget
+
+
+
+
+
+
+theorem pushpop_char {H : History} :
+  H.linearizable ↔
+  ( (H = ∅) ∨
+    (∃ s ∈ H.minmax, (H.rmv_val s.1).linearizable) ∨
+    (∃ s t, H.evs ~ (s ++ t) ∧ s ≠ [] ∧ t ≠ [] ∧ disjoint_vals s t ∧
+            sequentialization H (s ++ t) ∧ Lnz s ∧ Lnz t)) := by
+  apply Iff.intro
+  · intro LH
+    let ⟨s, lh, sh⟩ := LH
+    induction lh generalizing H with
+    | nil =>
+        simp at sh
+        apply Or.inl
+        obtain ⟨H, p⟩ := H
+        simp[sh]
+    | push_pop n l r hl hr ihl ihr =>
+        apply Or.inr
+        let ihr := @ihr (H.rmv_val n)
+        cases r with
+        | nil =>
+            -- r is empty, so n is minmax
+            apply Or.intro_left
+            -- Since we know it is a sequentialization,
+            -- we know n is able to be put first and last.
+            obtain ⟨Hs, Hswf⟩ := sh
+            simp[
+              History.replace_evt_itv,
+              List.pairwise_filterMap,
+              pairwise_append
+            ] at Hswf
+            obtain ⟨lwf, pw, rwf⟩ := Hswf
+            let Q := @Perm.mem_iff _ (↡ n) _ _ Hs
+            simp at Q
+            let J := History.evs_mem_iff_e.mp Q
+            obtain ⟨V, vm⟩ := AssocMap.mem_keys.mp J
+            simp at vm
+            use (n, V)
+            simp[History.minmax, AssocMap.mem_inter_iff]
+            have mini : (n, V) ∈ History.minimal H := by
+              simp[History.mem_minimal_iff, vm]
+              intro a b abm
+              have ak: (↡a).val ∈ H.keys := by rw[AssocMap.mem_keys]; use b
+              let Q := @History.evs_mem_iff_e.mpr ak
+              rw[Perm.mem_iff Hs] at Q
+              simp at Q
+              cases Q with
+              | inl Q =>
+                  simp[Q] at abm
+                  have eq := AssocMap.mem_inj H vm abm
+                  simp[eq]
+                  exact Int.le_of_lt b.add.ab
+              | inr Q =>
+                  let M := History.evs_mem_iff_e.mpr ak
+                  simp[Itv.before_compat] at *
+                  exact Int.le_of_lt $ @lwf { lb := label.add, val := a }
+                    ( by simp[Q] )
+                    ( V.add )
+                    ( by
+                        simp[
+                          History.getItv?,
+                          Option.bind_eq_some_iff
+                        ]
+                        use V
+                    )
+                    b.add
+                    (by
+                      simp[
+                        History.getItv?,
+                        Option.bind_eq_some_iff
+                      ]
+                      use b
+                    )
+            have maxi : (n, V) ∈ History.maximal H := by
+              simp[History.mem_maximal_iff, vm]
+              intro a b abm
+              have ak: (↡ a).val ∈ H.keys := by rw[AssocMap.mem_keys]; use b
+              let Q := @History.evs_mem_iff_e.mpr ak
+              rw[Perm.mem_iff Hs] at Q
+              simp at Q
+              have str_hyp: a = n ∨ (a ≠ n ∧ (↡a) ∈ l) := by grind
+              cases str_hyp with
+              | inl Q =>
+                  simp[Q] at abm
+                  have eq := AssocMap.mem_inj H vm abm
+                  simp[eq]
+                  exact Int.le_of_lt b.rmv.ab
+              | inr Q =>
+                  obtain ⟨neq, Q⟩ := Q
+                  have akeys : a ∈ AssocMap.keys H := by
+                    grind
+                  have tmp : (↡ a) ∈ { lb := label.add, val := n } :: l ++ [{ lb := label.rmv, val := n }] := by
+                    simp[Q]
+                  let ⟨am, rm⟩ := (History.evs_mem_iff H a).mpr akeys
+                  simp[Perm.mem_iff Hs, neq] at am rm
+                  exact Int.le_of_lt $ @rwf { lb := label.rmv, val := a }
+                    ( by simp[rm] )
+                    ( b.rmv )
+                    ( by
+                        simp[
+                          History.getItv?,
+                          Option.bind_eq_some_iff
+                        ]
+                        use b
+                    )
+                    V.rmv
+                    (by
+                      simp[
+                        History.getItv?,
+                        Option.bind_eq_some_iff
+                      ]
+                      use V
+                    )
+            simp[mini, maxi]
+            have n_eq : n = (n, V).1 := by simp
+            rw[n_eq, ← minmax_lnz]
+            · exact LH
+            · simp[History.minmax, AssocMap.mem_inter_iff, mini, maxi]
+        | cons x xs =>
+            apply Or.intro_right
+            use ↡n :: l ++ [ ↟ n ]
+            use x :: xs
+            unfold sequentialization at sh
+            obtain ⟨perm, ok⟩ := sh
+            simp at perm
+            simp[perm]
+            simp at ihl
+            simp[ihl]
+            obtain ⟨ihll, ihlr⟩ := ihl
+            have undup_H_evs : H.evs.Nodup := History.evs_nodup
+            have nodup_xs : xs.Nodup := by grind
+            apply And.intro
+            · apply And.intro
+              · intro y ym
+                -- This should be provable using undup
+                have count_ym : count y xs = 1 := by grind
+                intro neq
+                subst neq
+                have Cn := @Nodup.count _ _ _ y _ undup_H_evs
+                let Q := List.perm_iff_count.mp perm
+                simp[Perm.mem_iff perm, Q, List.count_cons, count_ym] at Cn
+                obtain ⟨yl, yv⟩ := y
+                simp at Cn
+                cases yl <;> simp +arith at Cn
+              · apply And.intro
+                · -- This too
+                  intro neq; subst neq
+                  let Q := Perm.nodup perm undup_H_evs
+                  obtain ⟨xl, xv⟩ := x
+                  simp at Q perm
+                  cases xl <;> simp[List.nodup_append] at Q
+                · apply And.intro
+                  · exact ihlr
+                  · intro neq
+                    subst neq
+                    let Q := Perm.nodup perm undup_H_evs
+                    obtain ⟨xl, xv⟩ := x
+                    simp at Q perm
+                    cases xl <;> simp[List.nodup_append] at Q
+            · apply And.intro
+              · simp[sequentialization, perm]
+                exact ok
+              · apply And.intro
+                · apply Lnz.push_pop n l [] hl Lnz.nil (by simp)
+                · exact hr
+  · intro dj
+    cases dj with
+    | inl emp => simp[emp]
+    | inr R =>
+      cases R with
+      | inl mm =>
+          obtain ⟨s, smm, lin⟩ := mm
+          apply (minmax_lnz smm).mpr lin
+      | inr sep =>
+          obtain ⟨s, t, Hyp⟩ := sep
+          use (s ++ t)
+          simp[linearization, Hyp]
+
+
+-- Yay! PushPop characterization done!
+-- Now we need to show:
+-- * separation ↔ separation around inner segments
+-- * Define algorithm
+-- * alg finds minmax
+-- * alg finds separation
+-- Then it should be done.
+
+-- We define deserted
+def History.populated (H : History) : ItvSet :=
+  let itvs := H.values.map (fun v => Itv.mk v.add.b v.rmv.a v.wf)
+  ItvSet.fromList itvs
+
+def History.deserted (H : History) : ItvSet :=
+  ItvSet.complement (H.populated)
+
+@[simp]
+theorem History.deserted_nil :
+  (∅ : History).deserted = ItvSet.nil := by
+  simp[History.deserted, History.populated, ItvSet.fromList, ItvSet.complement, AssocMap.values]
+  unfold EmptyCollection.emptyCollection instEmptyCollectionItvSet ItvSet.nil
+  simp
+
+theorem History.deserted_of_def (H : History) {itv : Itv} :
+  ((∃ a ∈ H, ∃ b ∈ H,
+    itv.a = a.2.add.b ∧ itv.b = b.2.rmv.a) ∧
+  ∀ v ∈ H, ¬ (Itv.mk v.2.add.b v.2.rmv.a v.2.wf).overlaps itv) ->
+  itv ∈ H.deserted := by
+  intro ⟨⟨a, aH, ⟨b, bH, ae, be⟩⟩, R⟩
+  obtain ⟨H, p⟩ := H
+  cases H with
+  | nil => simp at aH
+  | cons v hs =>
+      induction hs generalizing v with
+      | nil =>
+          simp at aH bH
+          subst aH bH
+          simp[← be, ← ae, Itv.overlaps, itv.ab] at R
+          exfalso
+          exact Int.not_lt_of_ge R itv.ab
+      | cons w ws ih =>
+          simp[AssocMap.mem_iff] at aH bH
+
+
+          cases aH with
+          | inl aH =>
+              subst aH
+
+
+
+  simp[History.deserted, History.populated, ItvSet.complement, ItvSet.fromList]
+
+theorem History.deserted_nil_iff (H : History) :
+  (H.deserted = ∅) ↔ (H.populated.1.length < 2) := by
+  simp[History.deserted]
+  exact complement_empty_iff H.populated
+
+
+  ↔
+  (H.deserted ≠ ∅) := by
+  apply Iff.intro
+  · intro ⟨s, t, perm, sne, tne, djst, seqhst, lnzs, lnzt⟩
+    apply ItvSet.ne_empty_of_mem
+    unfold sequentialization at seqhst
+    obtain ⟨Hs, Hswf⟩ := seqhst
+    simp[History.replace_evt_itv, pairwise_append] at Hswf
+    obtain ⟨pws, pwt, sok⟩ := Hswf
+    have ss : s ⊆ H.evs := by grind
+    have ts : t ⊆ H.evs := by grind
+    let latest_call := ((H.getItvs s ss).map (fun a => a.a)).max (by simp[sne])
+    let earliest_ret := ((H.getItvs t ts).map (fun a => a.b)).min (by simp[tne])
+    have lcmem : latest_call ∈ (H.getItvs s ss).map (fun a => a.a) := by simp[latest_call]
+    have ermem : earliest_ret ∈ (H.getItvs t ts).map (fun a => a.b) := by simp[earliest_ret]
+    simp[mem_map] at lcmem ermem
+    obtain ⟨⟨a1, a2, wfa⟩, itvm, ita⟩ := lcmem
+    obtain ⟨⟨b1, b2, wfb⟩, itvm', itb⟩ := ermem
+    let ⟨L1, L2, L3⟩ := History.getItvs_mem_evt itvm
+    let ⟨R1, R2, R3⟩ := History.getItvs_mem_evt itvm'
+
+    have ywf : latest_call < earliest_ret := by
+      rw[← ita, ← itb]
+      simp[Itv.before_compat] at sok
+      apply sok ⟨a1, a2, wfa⟩ _ L2 L3 ⟨b1, b2, wfb⟩ _ R2 R3
+
+    let O := Itv.mk latest_call earliest_ret ywf
+    use O
+    simp[History.deserted, History.populated, ItvSet.complement, ItvSet.fromList, AssocMap.values]
+
+
+
+    simp[History.mem_deserted_iff]
+
+
+
+    let SEP := H.sep_ts i
+
+    use i, SEP.1, SEP.2, s, t
+  · intro
