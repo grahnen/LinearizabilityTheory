@@ -230,6 +230,52 @@ theorem touches_symm {a b : Itv} :
     · intro ⟨l, r⟩
       simp[r, l]
 
+
+def contains_itv (a b : Itv) : Prop :=
+  a.a ≤ b.a ∧ b.b ≤ a.b
+
+theorem union_comm (a b : Itv) :
+  a.union b = b.union a := by
+  simp[union, min_comm, max_comm]
+
+def contains_union_left (a b : Itv) (cab : contains_itv a b) :
+  a.union b = a := by
+    let ⟨a1, a2, _⟩ := a
+    let ⟨b1, b2, _⟩ := b
+    let ⟨l, r⟩ := cab
+    simp at l r
+    simp[union, l, r]
+
+def contains_union_right (a b : Itv) (cba : contains_itv b a) :
+  a.union b = b := by
+    rw[union_comm]
+    exact contains_union_left b a cba
+
+
+theorem contains_itv_contains {a b : Itv} {j : Int} :
+  contains_itv a b -> b.contains j -> a.contains j := by
+    intro cab h
+    let ⟨la, lb⟩ := h
+    let ⟨l, r⟩ := cab
+    simp[Itv.contains]
+    apply And.intro
+    · exact Std.le_trans l la
+    · exact Std.le_trans lb r
+
+
+theorem contains_touches {a b : Itv} (cab : contains_itv a b) :
+  a.touches b := by
+    let ⟨l, r⟩ := cab
+    let l := Std.le_of_lt (Std.lt_of_le_of_lt l b.ab)
+    let r := Std.le_of_lt (Std.lt_of_lt_of_le b.ab r)
+    simp[touches, l, r]
+
+theorem hb_not_touching {a b : Itv} :
+  hb a b -> ¬ a.touches b := by
+    simp[hb, touches]
+    intro h _
+    exact h
+
 end Itv
 
 abbrev ItvSet := { itvs: List Itv // Itv.consecutive itvs }
@@ -1458,192 +1504,396 @@ theorem add_comm {s : ItvSet} {i x : Itv} :
               · simp[union, touches, abxa, xbaa]
 
 
+theorem mem_ne_not_touching {s : ItvSet} {i j : Itv} :
+  i ∈ s -> j ∈ s -> i ≠ j -> ¬ i.touches j := by
+  intro im jm ne
+  obtain ⟨s, cs⟩ := s
+  induction s with
+  | nil => simp at im
+  | cons a b ih =>
+      simp at cs im jm
+      cases im with
+      | inl eq =>
+          subst eq
+          simp[ne.symm] at jm
+          apply hb_not_touching
+          apply cs.1 j jm
+      | inr ims =>
+          cases jm with
+          | inl eq =>
+              subst eq
+              rw[touches_symm]
+              apply hb_not_touching
+              apply cs.1 i ims
+          | inr jms =>
+              exact ih cs.2 ims jms
+
 set_option maxHeartbeats 999999 in
 theorem mem_add {s : ItvSet} {i j : Itv} :
   j ∈ s.add i ->
-  ((j = i ∨ j ∈ s)) ∨ -- If j did not overlap anything
-  (∃ l ∈ s, l.touches i ∧ j = l.union i) ∨ -- There is *one* overlapping interval
+  (j = i ∧ ∀ q ∈ s, ¬ q.touches i) ∨ -- disjoint add is member
+  (j ∈ s ∧ j.contains_itv i) ∨ -- j already contains i, s unchanged
+  (j ∈ s ∧ ¬ i.touches j) ∨ -- j is already there, s unchanged locally
+  (∃ l ∈ s, l.touches i ∧ j = l.union i ) ∨ -- There is *one* overlapping interval ... ∧ ∀ r ∈ s, r ≠ l -> ¬ r.touches i
   (∃ l r, l ∈ s ∧ r ∈ s ∧ l.b < r.a ∧ l.touches i ∧
     r.touches i ∧ j = (l.union i |>.union r)) -- there are *two* overlapping
   := by
+    obtain ⟨s, cs⟩ := s
+    revert cs
+    simp[add]
+    fun_induction conseq_insert s i with
+    | case1 c d cd => simp
+    | case2 c1 c2 cab d1 d2 dab xs h =>
+        simp
+        intro d2R pw jH
+        cases jH with
+        | inl jHc =>
+            simp[jHc, contains_itv, touches, h.not_ge]
+            left
+            intro x xs xac2
+            let H := d2R x xs
+            let d2c2 : d1 < c2 := by calc
+              _ < _ := dab
+              _ < x.a := H
+              _ ≤ c2 := xac2
+            simp[d2c2.not_gt] at h
+        | inr jHr =>
+            cases jHr with
+            | inl jHl =>
+                simp[jHl, touches, dab.not_gt, h.not_ge]
+            | inr jhxs =>
+                let dj := d2R j jhxs
+                simp[jhxs, contains_itv, touches]
+                have c2ja : c2 < j.a := by calc
+                  _ < d1 := h
+                  _ < d2 := dab
+                  _ < j.a := dj
+                simp[c2ja]
+    | case3 c1 c2 cab d1 d2 dab xs h1 h2 ih =>
+        simp
+        simp at h1
+        intro d2R pw jH
+        cases jH with
+        | inl jD =>
+            simp[jD, contains_itv, touches, h1, h2]
+        | inr jcx =>
+            let ih := ih pw jcx
+            cases ih with
+            | inl ih1 =>
+                simp[ih1, touches, contains_itv, h1, h2]
+                left
+                intro q qs qac2
+                let H1 := d2R q qs
+                let H2 := ih1.2 q qs
+                simp[touches] at H2
+                exact H2 qac2
+            | inr ih => grind
+    | case4 c1 c2 cab d1 d2 dab xs h1 h2 ih =>
+        simp
+        simp at h1 h2
+        intro d2R pw jH
+        let H := ih pw jH
+        simp[union, touches, contains_itv] at H ⊢
+        cases H with
+        | inl H1 =>
+            simp[H1, h1, h2] at ⊢
+            grind
+        | inr H2 =>
+            simp[h1, h2]
+            grind
+-- The below needs them to also touch TODO.
+-- theorem mem_add_union_self_contains {s : ItvSet} {i j : Itv} :
+--   i ∈ s.add (j.union i) -> i.contains_itv j := by
+--   simp[add]
+--   obtain ⟨s, cs⟩ := s
+--   revert cs
+--   fun_induction conseq_insert s (j.union i) with
+--   | case1 a b ab => simp
+
+@[simp]
+theorem nil_add {i : Itv} :
+  (∅ : ItvSet).add i = ⟨[i], by simp⟩ := by
+  simp[ItvSet.add]
+@[simp]
+theorem Itv.union_self {i j : Itv} :
+  i = i.union j ↔ i.contains_itv j := by
+  simp[union, contains_itv]
+  apply Iff.intro
+  · intro iE
+    rw[iE]
+    simp
+  · intro lt
+    simp[lt]
+
+@[simp]
+theorem Itv.union_contains_left {i j : Itv} :
+  (i.union j).contains_itv i := by
+  simp[contains_itv, union]
+
+@[simp]
+theorem Itv.union_contains_right {i j : Itv} :
+  (i.union j).contains_itv j := by
+  simp[contains_itv, union]
+
+
+@[simp]
+theorem Itv.union_touches_left {i j : Itv} :
+  (i.union j).touches i := by
+  simp[touches, union, i.ab.le]
+
+@[simp]
+theorem Itv.union_touches_right {i j : Itv} :
+  (i.union j).touches j := by
+  simp[touches, union, j.ab.le]
+
+@[simp]
+theorem Itv.touches_union_left {i j : Itv} :
+  i.touches (i.union j) := by
+  simp[touches, union, i.ab.le]
+
+@[simp]
+theorem Itv.touches_union_right {i j : Itv} :
+  j.touches (i.union j) := by
+  simp[touches, union, j.ab.le]
+
+
+@[simp]
+theorem Itv.contains_union_self {i j : Itv} :
+  i.contains_itv (j.union i) ↔ i.contains_itv j := by
+  simp[contains_itv, union]
+
+theorem Itv.union_assoc {i j k : Itv} :
+  i.union (j.union k) = (i.union j).union k := by
+  simp[union,min_assoc, max_assoc]
+
+theorem mem_add_union_self_contains {s : ItvSet} {i j : Itv} :
+  i.touches j -> i ∈ s.add (j.union i) -> i.contains_itv j := by
+  intro itj isadd
+  let Q := mem_add isadd
+  simp at Q
+  cases Q with
+  | inl Q1 =>
+      simp at Q1
+      let ⟨iE, all⟩ := Q1
+      rw[Itv.union_comm, Itv.union_self] at iE
+      exact iE
+  | inr Q =>
+    cases Q with
+    | inl Q2 =>
+        simp at Q2
+        exact Q2.2
+    | inr Q =>
+      cases Q with
+      | inl Q3 =>
+          obtain ⟨l, lm, ltj, iE⟩ := Q3
+          rw[iE]
+          rw[Itv.union_assoc, @Itv.union_comm l, ← Itv.union_assoc]
+          simp
+      | inr Q4 =>
+          obtain ⟨l, r, lm, rm, lab, ltj, trj, iE⟩ := Q4
+          rw[iE]
+          rw[Itv.union_assoc, @Itv.union_comm l, ← Itv.union_assoc, ← Itv.union_assoc]
+          simp
+
+
+theorem contains_add_not_mem {s : ItvSet} {i j : Itv} :
+  i.contains_itv j -> j = i ∨ j ∉ s.add i := by
+  simp[add, contains_itv]
   obtain ⟨s, cs⟩ := s
   revert cs
+  fun_induction conseq_insert s i with
+  | case1 a b ab => simp; grind
+  | case2 a b ab c d cd xs h =>
+      simp[h]
+      intro d_lt_all pw aja jbb
+      by_cases jE : j = ⟨a, b, ab⟩
+      case pos => simp[jE]
+      case neg =>
+        simp[jE]
+        simp[← Itv.itv_eq] at jE ⊢
+        apply And.intro
+        · intro jc
+          subst jc
+          grind only
+        · intro jm
+          let H := d_lt_all j jm
+          have db : d < b := by calc
+            _ < j.a := H
+            _ < j.b := j.ab
+            _ ≤ b := jbb
+          have bd : b < d := by calc
+            _ < c := h
+            _ < d := cd
+          simp[db.not_gt] at bd
+  | case3 a b ab c d cd xs h1 h2 ih =>
+          simp[h1, h2]
+          intro d_lt_all pw aja jbb
+          by_cases jE : j = ⟨a, b, ab⟩
+          case pos => simp[jE]
+          case neg =>
+            simp[jE]
+            have jcd : j ≠ ⟨c, d, cd⟩ := by
+              simp[← Itv.itv_eq] at jE ⊢
+              grind
+            simp[jcd]
+            simp[jE] at ih
+            apply ih pw aja jbb
+  | case4 a b ab c d cd xs h1 h2 ih =>
+          simp[h1, h2]
+          intro d_lt_all pw aja jbb
+          by_cases jE : j = ⟨a, b, ab⟩
+          case pos => simp[jE]
+          case neg =>
+            simp[jE] at ih ⊢
+            simp[union] at ih ⊢
+            simp at h1 h2
+            let Q := ih pw (by simp[aja]) (by simp[jbb])
+            cases Q with
+            | inl Q1 =>
+                simp[Q1] at jE
+                grind
+            | inr Q2 => simp[Q2]
+
+
+theorem add_touching_contains {s : ItvSet} {i j : Itv} :
+  i.touches j -> i ∈ s -> j ∈ s.add i -> j.contains_itv i := by
+  obtain ⟨s, cs⟩ := s
   simp[add]
   fun_induction conseq_insert s i with
-  | case1 => simp
-  | case2 c1 c2 cab d1 d2 dab xs h =>
-      simp
-      intro d2R pw jH
-      grind
-  | case3 c1 c2 cab d1 d2 dab xs h1 h2 ih =>
-      simp
-      intro d2R pw jH
-      grind
-  | case4 c1 c2 cab d1 d2 dab xs h1 h2 ih =>
-      simp
-      intro d2R pw jH
-      let H := ih pw jH
+  | case1 a b ab => simp
+  | case2 a b ab c d cd xs h =>
+    simp[touches, contains_itv]
+    intro aj jb H
+    cases H with
+    | inl H1 =>
+        obtain ⟨ac, bd⟩ := H1
+        subst ac bd
+        simp
+        intro jE
+        cases jE with
+        | inl jE1 => simp[jE1]
+        | inr jxs => grind
+    | inr H2 =>
+        simp at *
+        let H := cs.1 _ H2
+        simp at H
+        grind
+  | case3 a b ab c d cd xs h1 h2 ih  =>
+      simp[touches, contains_itv, *] at ih ⊢
+      intro ajb jab H
       cases H with
       | inl H1 =>
-          cases H1 with
-          | inl H1 =>
-              simp at h1 h2
-              simp[union] at H1
-              simp[union, touches, H1, h1, h2, min_comm, max_comm]
-          | inr H2 =>
-              simp at h1 h2
-              simp[touches, H2, h1, h2]
-      | inr H3 =>
-          simp at h1 h2
-          simp[union, touches, h1, h2] at H3
-          cases H3 with
-          | inl H3 =>
-              obtain ⟨l, lm, ⟨⟨ll, lr⟩, jE⟩⟩ := H3
-              subst jE
-              let d2l := d2R l lm
-              have d2lb : d2 < l.b := by calc
-                _ < l.a := d2l
-                _ < l.b := l.ab
-              simp[touches, h1, h2]
-              by_cases c1d1 : c1 ≤ d1
-              case pos =>
-                by_cases c2d2 : c2 ≤ d2
-                case pos =>
-                  simp[union, c1d1, c2d2, d2lb.not_ge]
-                  right; left
-                  use l, lm
-                  omega
-                case neg =>
-                  simp at c2d2
-                  have c1la : c1 < l.a := by calc
-                    _ ≤ d2 := h2
-                    _ < l.a := d2l
-                  simp[union, c1d1, c2d2.le, d2lb.not_ge, c1la.le]
-                  by_cases lbc2 : l.b ≤ c2
-                  case pos => simp[lbc2]
-                  case neg =>
-                    simp[lbc2]
-                    right; left
-                    use l, lm
-                    omega
-              case neg =>
-                simp at c1d1
-                simp[union, c1d1.le]
-                have d1la : d1 < l.a := by calc
-                  _ < d2 := dab
-                  _ < l.a := d2l
-                simp[d1la.le]
-                right; right; left; right
-                use l, lm
-                omega
-          | inr H3 =>
-              obtain ⟨l, lm, ⟨r, rm, l_hb_r, ⟨ll, lr⟩, ⟨rl, rr⟩, jE⟩⟩ := H3
-              subst jE
-              simp
-              simp[touches, h1, h2]
+          obtain ⟨ac, bd⟩ := H1
+          subst ac bd
+          intro jE
+          cases jE with
+          | inl jE1 => simp[jE1]
+          | inr jxs => grind
+      | inr H2 =>
+          simp at *
+          let H := cs.1 _ H2
+          simp at H
+          intro jE
+          cases jE with
+          | inl jE1 =>
+              simp[jE1] at *
+              grind
+          | inr jxs =>
+              exact ih cs.2 ajb jab H2 jxs
+  | case4 a b ab c d cd xs h1 h2 ih =>
+      simp[touches, contains_itv, union, *] at ih ⊢
+      intro ajb jab H
+      simp at cs
+      cases H with
+      | inl jE =>
+          obtain ⟨ac, bd⟩ := jE
+          subst ac bd
+          simp at ih ⊢
+          intro jm
+          have jadd : j ∈ add ⟨xs, cs.2⟩ ⟨a, b, ab⟩ := by simp[add, jm]
+          let Q := mem_add jadd
+          simp[contains_itv,touches, union, ajb, jab] at Q
+          grind
+      | inr jE =>
+          grind
 
-              have d1lb : d1 < l.b := by calc
-                _ < d2 := dab
-                _ < l.a := d2R l lm
-                _ < l.b := l.ab
-              have c1lb : c1 < l.b := by calc
-                _ ≤ d2 := h2
-                _ < l.a := d2R l lm
-                _ < l.b := l.ab
-
-              have d1ra : d1 < r.a := by calc
-                _ < d2 := dab
-                _ < r.a := d2R r rm
-
-              have c1ra : c1 < r.a := by calc
-                _ ≤ d2 := h2
-                _ < r.a := d2R r rm
-
-              have d1rb : d1 < r.b := by calc
-                _ < d2 := dab
-                _ < r.a := d2R r rm
-                _ < r.b := r.ab
-              have c1rb : c1 < r.b := by calc
-                _ ≤ d2 := h2
-                _ < r.a := d2R r rm
-                _ < r.b := r.ab
-
-              have d2rb : d2 < r.b := by calc
-                _ < r.a := d2R r rm
-                _ < r.b := r.ab
-
-              have lbrb : l.b < r.b := by calc
-                _ < r.a := l_hb_r
-                _ < r.b := r.ab
-
-              have c1la : c1 < l.a := by calc
-                _ ≤ d2 := h2
-                _ < l.a := d2R l lm
-
-              have d1la : d1 < l.a := by calc
-                _ < d2 := dab
-                _ < l.a := d2R l lm
-
-              have d2lb : d2 < l.b := by calc
-                _ < l.a := d2R l lm
-                _ < l.b := l.ab
-
-              simp[d2R r rm |>.not_ge] at rl
-              simp[d2R l lm |>.not_ge] at ll
-
-              simp[d1ra.le, d2rb.le]
-              by_cases c2rb : c2 ≤ r.b
-              case pos =>
-                simp[c2rb, dab.not_gt]
-                right; right
-                left
-                use r, rm
-                simp[union, d2R r rm, rl, c1rb.le, c1ra.le, c2rb, d2rb.le, lbrb.le]
-                rw[← min_assoc]
-                simp[c1la.le, min_comm]
-              case neg =>
-                simp at c2rb
-                simp[c2rb.le, dab.not_gt]
-                by_cases c2lb : c2 ≤ l.b
-                case pos =>
-                  simp[c2lb]
-                  right; right; left
-                  use l, lm
-                  simp[d2R l lm, ll, c1lb.le,]
-                  grind
-                case neg =>
-                  simp at c2lb
-                  simp[c2lb.le]
-                  by_cases c1d1 : c1 ≤ d1
-                  case pos =>
-                    simp[c1d1, c1la.le]
-                  case neg =>
-                    simp at c1d1
-                    simp[union, c1d1.le, d1la.le, c1d1.ne]
-                    by_cases c2d2 : c2 ≤ d2
-                    case pos =>
-                      by_cases c2d2' : c2 = d2
-                      case pos => simp[c2d2']
-                      case neg =>
-                        simp[c2d2, c2d2']
-                        have c2d2 : c2 < d2 := by
-                          let Q := c2d2.lt_or_eq
-                          simp[c2d2'] at Q
-                          exact Q
-                        have c2ra : c2 < r.a := by calc
-                          _ < d2 := c2d2
-                          _ < r.a := d2R r rm
-                        let Q := rl.eq_or_lt
-                        simp[c2ra.ne.symm, c2ra.not_gt] at Q
-                    case neg =>
-                      simp at c2d2
-                      simp[c2d2.le]
+-- theorem add_unchanged_iff {s : ItvSet} {i : Itv} :
+--   i ∈ (s.add i) ↔ (∀ q ∈ s, q.touches i -> i.contains_itv q) := by
+--   apply Iff.intro
+--   · intro mem
+--     let Q := mem_add mem
+--     simp at Q
+--     cases Q with
+--     | inl Q1 => intro q qs; simp[Q1 q qs]
+--     | inr Q =>
+--       cases Q with
+--       | inl Q2 =>
+--           intro q qs qt
 
 
--- TODO: Use the above theorem to prove add_contains
 
-theorem add_unchanged_iff {s : ItvSet} {i : Itv} :
-  i ∈ (s.add i) -> ((∃ j ∈ s, i.a ≤ j.a ∧ j.b ≤ i.b) ∨ ∀ k ∈ s, ¬ k.touches i) := by
+
+--   sorry
+  -- simp[add]
+  -- obtain ⟨s, cs⟩ := s
+  -- revert cs
+  -- fun_induction conseq_insert s i with
+  -- | case1 a b ab => simp
+  -- | case2 a b ab c d cd xs h =>
+  --     simp[touches, h.not_ge, contains_itv, h]
+  --     intro d_lt_all pw q qxs qab aqb
+  --     let H := d_lt_all q qxs
+  --     exfalso
+  --     apply Int.lt_irrefl d
+  --     calc
+  --       d < q.a := H
+  --       _ ≤ b := qab
+  --       _ < c := h
+  --       _ < d := cd
+  -- | case3 a b ab c d cd xs h1 h2 ih =>
+  --     simp[h1, h2]
+  --     simp at h1
+  --     intro d_lt_all pw
+  --     let Q := Std.lt_trans cd h2
+  --     simp[Q.ne.symm]
+  --     simp[ih pw]
+  --     simp[touches, contains_itv, h2.not_ge]
+  -- | case4 a b ab c d cd xs h1 h2 ih =>
+  --     simp[h1, h2, touches] at ih ⊢
+  --     intro d_lt_all pw
+  --     simp at h1 h2
+  --     simp[h1, h2]
+  --     let Q := @mem_add_union_self_contains ⟨xs, pw⟩ ⟨a, b, ab⟩ ⟨c, d, cd⟩ (by simp[touches, h1, h2])
+  --     simp[add] at Q
+  --     rw[union_comm] at Q
+  --     apply Iff.intro
+  --     · intro H
+  --       simp at H Q
+  --       simp[Q H]
+  --       simp[contains_itv]
+  --       intro i ixs iab aib
+  --       let dia := d_lt_all i ixs
+  --       let R := Q H
+  --       simp[contains_itv] at R
+  --       let aia := calc
+  --         _ ≤ d := h2
+  --         _ < i.a := dia
+  --       simp[aia.le]
+
+  --       let ibb := calc
+
+  --       apply And.intro
+  --       ·
+
+
+
+  --     rw[mem_add_union_self_contains]
+  --     simp[touches, contains_itv, h1, h2]
+
+
+
+theorem add_unchanged_of {s : ItvSet} {i : Itv} :
+  i ∈ (s.add i) -> ((∃ j ∈ s, i.contains_itv j) ∨ ∀ k ∈ s, ¬ k.touches i) := by
   obtain ⟨s, cs⟩ := s
   simp[add]
   revert cs
@@ -1662,7 +1912,7 @@ theorem add_unchanged_iff {s : ItvSet} {i : Itv} :
       simp[touches, h1, h2] at ih ⊢
       intro xsd pw H
       cases H with
-      | inl H1 => simp[H1]
+      | inl H1 => simp[Itv.contains_itv, H1]
       | inr H2 =>
           let J := ih pw H2
           cases J with
@@ -1685,12 +1935,8 @@ theorem add_unchanged_iff {s : ItvSet} {i : Itv} :
       simp[union, touches] at Q
       cases Q with
       | inl Q1 =>
-          cases Q1 with
-          | inl Q1 =>
-              simp[union, Q1.1, Q1.2] at H
-              grind
-          | inr Q2 => grind
-      | inr Q3 => grind
+          simp[Itv.contains_itv, Q1]
+      | inr Q3 => simp[Itv.contains_itv]; grind
 
 theorem add_touches {s : ItvSet} {i j : Itv} :
   i.touches j ->
@@ -1700,6 +1946,17 @@ theorem add_touches {s : ItvSet} {i j : Itv} :
   apply conseq_insert_two_overlapping tij
 
 
+theorem add_all_nontouch {s : ItvSet} {i j : Itv} :
+  (∀ q ∈ s, ¬ q.touches i) -> j ∈ s.add i ->
+    j = i ∨ j ∈ s := by
+      intro all jsi
+      let Q := @mem_add s i j jsi
+      cases Q with
+      | inl Q1 => simp[Q1]
+      | inr Q =>
+        cases Q with
+        | inl Q2 => grind
+        | inr Q => grind
 
 theorem contains_add_not_touching {s : ItvSet} {i j : Itv} {t : Int} :
   ¬ i.touches j -> (s.add i |>.add j).contains t ->
@@ -1714,44 +1971,39 @@ theorem contains_add_not_touching {s : ItvSet} {i j : Itv} {t : Int} :
       let Q := @mem_add (s.add j) i x xm
       cases Q with
       | inl Q1 =>
-          cases Q1 with
-          | inl Q1 =>
-              subst Q1
-              simp[Itv.instMembershipInt] at tx
-              simp[tx] at it
-          | inr Q2 =>
-              use x, Q2
+          simp[instMembershipInt, Q1] at tx
+          contradiction
       | inr Q3 =>
           cases Q3 with
           | inl Q3 =>
-              obtain ⟨l, lm, ⟨⟨ll, lr⟩, jE⟩⟩ := Q3
-              use l, lm
-              simp[union, Itv.instMembershipInt, Itv.contains, jE] at tx it ⊢
-              grind
-          | inr Q4 =>
-              obtain ⟨l, r, lm, rm, lr, lti, rti, xE⟩ := Q4
-              rw[xE, Itv.instMembershipInt] at tx
-              have litr : l.union i |>.touches r := by
-                simp[union, touches] at lti rti ⊢
-                grind
-
-              let Q := @union_contains ((l.union i)) r t litr |>.mp tx
+              use x, Q3.1
+          | inr Q =>
+            cases Q with
+            | inl Q4 =>
+              use x, Q4.1
+            | inr Q =>
               cases Q with
-              | inl Q1 =>
-                  let Q := union_contains lti |>.mp Q1
-                  simp[it] at Q
+              | inl Q5 =>
+                  obtain ⟨l, lm, li, lE⟩ := Q5
                   use l, lm
+                  simp[lE] at tx
+                  let Q := union_contains li |>.mp tx
+                  simp[it] at Q
                   exact Q
-              | inr Q2 =>
-                  use r, rm
-                  exact Q2
-
-
-
-
-
-
-
+              | inr Q5 =>
+                  obtain ⟨l, r, lm, rm, l_hb_r, li, ri, jE⟩ := Q5
+                  simp[jE] at tx
+                  let J := union_touches li r |>.mpr (by simp[touches_symm.mp ri])
+                  let Q1 := union_contains J |>.mp tx
+                  cases Q1 with
+                  | inl lit =>
+                      let Q2 := union_contains li |>.mp lit
+                      simp[it] at Q2
+                      use l, lm
+                      exact Q2
+                  | inr rit =>
+                      use r, rm
+                      exact rit
 
 
 
@@ -1800,50 +2052,131 @@ theorem add_contains {s : ItvSet} {i : Itv} {j : Int} :
           let Q1 := @mem_add (q.add x) i l  lm
           cases Q1 with
           | inl Q11 =>
-              cases Q11 with
-              | inl liE =>
-                  subst liE
-                  exact Or.intro_left _ jl
-              | inr lqx =>
-                  right
-                  use l, lqx
+              obtain ⟨liE, all⟩ := Q11
+              subst liE
+              left; exact jl
           | inr Q12 =>
               cases Q12 with
               | inl Q12 =>
-                  obtain ⟨m, mm, ⟨mi, lE⟩⟩ := Q12
-                  rw[lE] at jl
-                  let Q := union_contains mi |>.mp jl
-                  cases Q with
-                  | inl Q1 =>
-                      right
-                      use m, mm
-                      exact Q1
-                  | inr Q2 => simp[Q2]
+                  right
+                  use l, Q12.1
               | inr Q13 =>
-                  obtain ⟨l, r, lm, rm, l_hb_r, li, ri, jE⟩ := Q13
-                  rw[jE] at jl
-                  let litr : l.union i |>.touches r := by
-                    simp[union, touches] at li ri ⊢
-                    grind
-                  let Q := union_contains litr |>.mp jl
-                  cases Q with
-                  | inl Q1 =>
-                      let Q := union_contains li |>.mp Q1
+                cases Q13 with
+                | inl Q13 =>
+                  right
+                  use l, Q13.1
+                | inr Q14 =>
+                  cases Q14 with
+                  | inl Q14 =>
+                      obtain ⟨m, mm, mi, mE⟩ := Q14
+                      simp[mE] at jl
+                      let Q := union_contains mi |>.mp jl
                       cases Q with
-                      | inl Q11 =>
-                          right
-                          use l, lm
-                          exact Q11
-                      | inr Q12 => simp[Q12]
-                  | inr Q2 =>
-                      right
-                      use r, rm
-                      exact Q2
+                      | inl mj =>
+                          right; use m, mm; exact mj
+                      | inr ij => exact Or.inl ij
+                  | inr Q15 =>
+                      obtain ⟨l1, r1, lm1, rm1, l_hb_r1, li1, ri1, jE1⟩ := Q15
+                      simp[jE1] at jl
+                      let J := union_touches li1 r1 |>.mpr (by simp[touches_symm.mp ri1])
+                      let Q1 := union_contains J |>.mp jl
+                      cases Q1 with
+                      | inl lit1 =>
+                          let Q2 := union_contains li1 |>.mp lit1
+                          cases Q2 with
+                          | inl mi1 =>
+                              right; use l1, lm1; exact mi1
+                          | inr ij1 => exact Or.inl ij1
+                      | inr rit1 =>
+                          right; use r1, rm1; exact rit1
         · intro H
           cases H with
           | inl hi =>
               exact add_contains_new hi
           | inr hs =>
               exact add_contains_old hs
+
+
+
+-- theorem add_unchanged_of {s : ItvSet} {i : Itv} :
+--   i ∈ (s.add i) -> (i ∈ s ∨ ∀ k ∈ s, (¬ k.touches i ∨ i.contains_itv k)) := by
+--   intro isi
+--   let Q := mem_add isi
+--   simp at Q
+--   revert isi
+--   cases Q with
+--   | inl Q1 =>
+--     intro isi; right;
+--     intro k km
+--     let J := Q1 k km
+--     simp[J]
+--   | inr Q =>
+--     cases Q with
+--     | inl Q2 => intro isi; left; exact Q2.1
+--     | inr Q =>
+--       cases Q with
+--       | inl Q3 => intro isi; left; exact Q3.1
+--       | inr Q =>
+--         cases Q with
+--         | inl Q4 =>
+--             intro isi
+--             right
+--             intro j js
+--             simp[touches, contains_itv]
+
+--             obtain ⟨l, lm, li, lE⟩ := Q4
+--             simp[lE] at isi
+--             let Q := union_contains li |>.mp isi
+--             simp at Q
+--             exact Q
+--         | inr Q5 =>
+--             obtain ⟨l, r, lm, rm, l_hb_r, li, ri, jE⟩ := Q5
+--             simp[jE] at isi
+--             let J := union_touches li r |>.mpr (by simp[touches_symm.mp ri])
+--             let Q1 := union_contains J |>.mp isi
+--             cases Q1 with
+--             | inl lit =>
+--                 let Q2 := union_contains li |>.mp lit
+--                 simp at Q2
+--                 exact Q2
+--             | inr rit =>
+--                 let Q2 := union_contains ri |>.mp rit
+--                 simp at Q2
+--                 exact Q2
+
+theorem add_unchanged_iff_contains_of_touching {s : ItvSet} {i : Itv} :
+  i ∈ (s.add i) ↔ (∀ j ∈ s, i.touches j -> i.contains_itv j) := by
+  simp[add]
+  obtain ⟨s, cs⟩ := s
+  revert cs
+  simp
+  fun_induction conseq_insert s i with
+  | case1 a b ab => simp
+  | case2 a b ab c d cd xs h =>
+      simp[touches, contains_itv, h.not_ge]
+      grind
+  | case3 a b ab c d cd xs h1 h2 ih =>
+      simp[touches, contains_itv, *] at ih ⊢
+      grind
+  | case4 a b ab c d cd xs h1 h2 ih =>
+      simp[touches, contains_itv] at ih ⊢
+      simp at h1 h2
+      simp[h1, h2]
+      intro daa pw
+      by_cases abcd : (⟨a, b, ab⟩ : Itv).contains_itv ⟨c, d, cd⟩
+      case pos =>
+        simp[contains_itv] at abcd
+        simp[abcd, union] at ih ⊢
+        rw[ih pw]
+      case neg =>
+        unfold contains_itv at abcd
+        simp[abcd] at ⊢
+        intro mem
+        let J := @mem_add_union_self_contains ⟨xs, pw⟩ ⟨a, b, ab⟩ ⟨c, d, cd⟩
+          (by simp[touches, h1, h2])
+          (by simp[add, union_comm, mem])
+        simp[contains_itv] at J
+        simp[abcd] at J
+
 
 end ItvSet
