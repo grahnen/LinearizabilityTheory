@@ -1020,10 +1020,10 @@ theorem AssocMap.subset_filterK_iff {H} {P} {l} :
         aesop
 
 
-def History.itvs {H : History} : Set Itv :=
+def History.itvs {H : History} : Set CItv :=
   { v.2.add | v ∈ H } ∪ { v.2.rmv | v ∈ H }
 
-def History.itvs_list {H : History} : List Itv :=
+def History.itvs_list {H : History} : List CItv :=
   (H.inner.map (fun v => v.2.add)) ++ (H.inner.map (fun v => v.2.rmv))
 
 theorem History.itvs_eq_itvs_list {H : History} :
@@ -1348,7 +1348,7 @@ theorem AssocMap.get_head {V P} {a : Nat × V} {as R Q pf} :
 set_option maxHeartbeats 99999999 in
 -- Increasing heartbeat limit because this proof is long.
 -- It timed out about 75% of the way through with the default
-theorem Lnz_iff {H : History} {v : Nat × Value} :
+theorem Lnz_iff {H : History} :
   H.linearizable ↔
   ((H.Minmax ≠ ∅ ∧ ∀ v ∈ H.Minmax, History.linearizable (H.rmv_val v.1)) ∨
   (H = ∅) ∨
@@ -1392,8 +1392,8 @@ theorem Lnz_iff {H : History} {v : Nat × Value} :
         have evts_eq : itvs = H.replace_evt_itv
             (↡ n :: l ++ [↟ n])
             (by grind) := rfl
-        let ts := itvs.argmax (fun i : Itv => i.a)
-        have ts_eq : ts = itvs.argmax (fun i : Itv => i.a) := rfl
+        let ts := itvs.argmax (fun i : CItv => i.a)
+        have ts_eq : ts = itvs.argmax (fun i : CItv => i.a) := rfl
         let Q := @Option.isSome_iff_exists _ ts
         let ⟨tv, eq⟩ := Q.mp (by
           cases h: ts with

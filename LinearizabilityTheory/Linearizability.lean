@@ -176,15 +176,15 @@ theorem Lnz_append {l1 l2 : seq}
 
 open List
 
-def History.getItv? (H : History) (e : evt) : Option Itv :=
+def History.getItv? (H : History) (e : evt) : Option CItv :=
   (H.get? e.2) >>= fun vl => if e.1 = label.add then vl.add else vl.rmv
 
 
-def History.getItv (H : History) (e : evt) (he : e.2 ∈ H.keys) : Itv :=
+def History.getItv (H : History) (e : evt) (he : e.2 ∈ H.keys) : CItv :=
   let vl := H.get e.2 he
   if e.1 = label.add then vl.add else vl.rmv
 
-theorem History.getItv?_of_getItv {itv : Itv} {H : History} {e : evt} (he : e.2 ∈ H.keys) :
+theorem History.getItv?_of_getItv {itv : CItv} {H : History} {e : evt} (he : e.2 ∈ H.keys) :
   H.getItv e he = itv -> (History.getItv? H e = some itv) := by
   simp[History.getItv, History.getItv?]
   simp[AssocMap.mem_keys] at he
@@ -270,10 +270,10 @@ theorem perm_subset {α : Type} {l1 l2 : List α} (p : l1 ~ l2) :
   intro a am
   apply p.mem_iff.mp am
 
-def History.replace_evt_itv? (H : History) (s : seq) : List Itv :=
+def History.replace_evt_itv? (H : History) (s : seq) : List CItv :=
   s.filterMap (fun e => H.getItv? e)
 
-def History.replace_evt_itv (H : History) (s : seq) (sub : s ⊆ H.evs) : List Itv :=
+def History.replace_evt_itv (H : History) (s : seq) (sub : s ⊆ H.evs) : List CItv :=
   s.pmap (fun e em => H.getItv e em) (by
     intro a am
     let Q := (@List.subset_def _ s H.evs).mp sub am
@@ -330,12 +330,6 @@ theorem History.separate_nil {ts} :
   sep_ts ∅ ts = (∅, ∅) := by
   simp[sep_ts, AssocMap.separate_pred]
 
-
-theorem val_pred_cons {P : Value -> Value -> Prop} {x : Nat × Value} {xs : List (Nat × Value)} :
-  val_pred (x :: xs) P -> val_pred xs P := by
-  simp[val_pred]
-  grind
-
 theorem History.sep_ts_perm {H : History} {ts} :
   History.evs (H.sep_ts ts).1 ++ History.evs (H.sep_ts ts).2 ~ H.evs := by
   obtain ⟨H, p, okP⟩ := H
@@ -350,7 +344,7 @@ theorem History.sep_ts_perm {H : History} {ts} :
       simp[xts, xts.not_ge]
       apply ih
       · grind
-      · exact val_pred_cons okP
+      · exact val_pred_skip okP
     case neg =>
       have tsx : ts ≤ x.2.add.b := by grind
       simp[xts, tsx, flatMap_cons]
@@ -369,7 +363,7 @@ theorem History.sep_ts_perm {H : History} {ts} :
       simp
       apply ih
       · grind
-      · exact val_pred_cons okP
+      · exact val_pred_skip okP
 
 theorem Lnz_filter {s : seq} {P : Nat → Prop} [DecidablePred P] :
   Lnz s -> Lnz (s.filter (P ·.2)) := by
@@ -717,71 +711,6 @@ theorem three_order_cases (a b c : Nat) :
   c < b ∧ b < a := by grind
 
 
-
--- @[simp]
--- theorem AssocMap.mem_insert' {V} [DecidableEq V] {H : AssocMap V} {n m : Nat} {v v' : V} :
---   (m, v) ∈ (H.insert n v') <-> ((m = n ∧ v = v') ∨ (m ≠ n ∧ (m, v) ∈ H)) := by
---   induction H using AssocMap.insert_induct' generalizing m n v v' with
---   | nil =>
---       simp[insert, insert_sorted]
---   | ins x y H ih =>
---       by_cases eq : m = n ∧ v = v'
---       case pos => simp[eq]
---       case neg =>
---         simp[eq]
---         by_cases xn : x = n
---         case pos =>
---           simp[xn]
---           subst xn
---           rw[ih]
---           simp[eq]
---           intro mx
---           rw[ih]
---           simp[mx]
---         case neg =>
---           by_cases mn : m = n
---           case pos =>
---             simp[mn]
---             intro nm
---             simp[mn] at eq
---             let Q := @AssocMap.mem_insert _ (H.insert x y) n v'
---             apply eq
---             apply mem_inj _ nm Q
---           case neg =>
---             simp[mn, ih]
-
--- @[simp]
--- theorem AssocMap.insert_get {H : History} {n : Nat} {v : Value} :
---   ∀ {em}, (H.insert n v).get n em = v := by
---   simp
-
--- @[simp]
--- theorem AssocMap.get_insert {H : History} {n m : Nat} {v : Value} :
---   ∀ {em em'}, (H.insert n v).get m em = if nm: n = m then v else H.get m em' := by
---   intro em em'
---   by_cases nm : n = m
---   case pos =>
---     simp[nm]
---   case neg =>
---     have nm : n ≠ m := by simp[nm]
---     simp[nm, nm.symm]
-
-
--- @[simp]
--- theorem History.fixme {H : History} {n : Nat} {v : Value} {s : seq} {em em'}
---   (nm : n ∉ H.keys) :
---   pmap (fun e em => getItv H e em) s em <+
---   pmap (fun e em ↦ getItv (AssocMap.insert H n v) e em) s em' := by
---   induction s with
---   | nil => simp
---   | cons x xs ih =>
---       simp[getItv]
---       rw[AssocMap.get_insert]
---       · have neq: n ≠ x.val := by grind
---         simp[neq]
---         apply ih
---       · exact em x (by simp)
-
 @[simp]
 theorem History.subset_filter_evs_subset {H : History} {P : Nat → Prop} [DecidablePred P]
   {s : seq} (Hs : s ⊆ History.evs (H.filterK P)) :
@@ -820,57 +749,6 @@ theorem History.repl_evt_itv_sub_sublist {H : History}
       apply ih
       · simp[p1]
 
---   obtain ⟨H, wf⟩ := H
---   induction s generalizing H with
---   | nil => simp[replace_evt_itv]
---   | cons x xs ih =>
---       simp[replace_evt_itv] at ih ⊢
---       simp[filter_cons]
---       by_cases px : P x.val
---       case neg =>
---         simp[px]
---         apply Sublist.cons
---         apply ih
-
-
---       case pos =>
---         simp[px]
---       let H : History := { inner := x :: xs, wf := wf }
---       let Q := @AssocMap.get_of_filter_eq _ H x.1 (fun x => P x.1) (by
---         simp[H, AssocMap.filter]
---       )
---       let Q := @AssocMap.get_filter H P (by assumption)
-
-
-
---   induction s with
---   | nil => simp[History.replace_evt_itv]
---   | cons x xs ih =>
---       simp[History.replace_evt_itv, filter_cons]
---       by_cases px : P x.2
---       case pos =>
---         have xm: x ∈ H.evs := by
---           apply Hs.mem_iff.mpr
---           simp
---         let J := History.evs_mem_iff_mem_keys.mp xm
---         let Q := @History.getItv_filter H P _ x (by
---           simp[AssocMap.mem_keys, AssocMap.filterK, AssocMap.mem_filter, px]
---           use H.get x.val J
---           simp
---         ) J
---         simp[Q, px]
---         simp[replace_evt_itv] at ih
---         apply ih
-
---         -- This is hard :(
---         sorry
-
-
---       have nd := H.evs_nodup
---       have nds : (x :: xs).Nodup := by grind
---       obtain ⟨H, wf⟩ := H
---       simp[History.evs] at nd
---       obtain ⟨nhs, nd⟩ := nd
 
 @[simp]
 theorem History.sub_evs_mem_keys {H : History} {e : evt}
@@ -1169,13 +1047,13 @@ theorem empty_lin :
   use []
   simp[linearization, Lnz.nil, sequentialization]
 
-def History.getItvs (H : History) (s : seq) (h : s ⊆ H.evs) : List Itv :=
+def History.getItvs (H : History) (s : seq) (h : s ⊆ H.evs) : List CItv :=
   s.attach.map (fun ⟨e, em⟩ => H.getItv e (by
     simp[← History.evs_mem_iff_e]; exact h em
   ))
 
 @[simp]
-theorem History.getItvs_mem_evt {itv : Itv} {H : History} {s : seq} {ss : s ⊆ H.evs} :
+theorem History.getItvs_mem_evt {itv : CItv} {H : History} {s : seq} {ss : s ⊆ H.evs} :
   itv ∈ H.getItvs s ss -> ∃ e ∈ s, H.getItv? e = some itv := by
   simp[History.getItvs]
   intro e em hget

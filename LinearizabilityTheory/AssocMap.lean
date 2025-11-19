@@ -16,15 +16,46 @@ theorem wf_cons {K V : Type} [LT K] (x : K × V) (xs : List (K × V)) :
     wf_map, map_cons, pairwise_cons, mem_map, Prod.exists, exists_and_right, exists_eq_right,
     forall_exists_index, Prod.forall]
 
+
+@[simp]
+theorem wf_head {K V : Type} [LT K] {x : K × V} {xs : List (K × V)} :
+  wf_map (x :: xs) →
+    ∀ y ∈ xs, x.1 < y.1 := by
+  intro h
+  let Q := wf_cons _ _ |>.mp h
+  exact Q.1
+
+
 def val_pred {V : Type} (l : List (Nat × V)) (P : V -> V -> Prop) : Prop :=
   ∀ k1 k2, k1 ∈ l -> k2 ∈ l -> k1.1 ≠ k2.1 -> P k1.2 k2.2
 
 @[simp]
-theorem val_pred_tl {V : Type} {P : V -> V -> Prop} {x : Nat × V} {xs : List (Nat × V)} :
+theorem val_pred_skip {V : Type} {P : V -> V -> Prop} {x : Nat × V} {xs : List (Nat × V)} :
   val_pred (x :: xs) P →
   val_pred xs P := by
     intro h k1 k2 k1m k2m nek
     apply h _ _ (by simp[k1m]) (by simp[k2m]) nek
+
+@[simp]
+theorem val_pred_cons {V : Type} {P : V -> V -> Prop} {x : Nat × V} {xs : List (Nat × V)} :
+  val_pred (x :: xs) P ->
+    (∀ k2, k2 ∈ xs -> x.1 ≠ k2.1 -> P x.2 k2.2) ∧ val_pred xs P := by
+      simp[val_pred]
+      intro H
+      apply And.intro
+      · intro b bv bm xb
+        let Q := H x.1 x.2 b bv (by simp) (by simp[bm]) xb
+        exact Q
+      · intro a av b bv am bm ab
+        apply H a av b bv (by simp[am]) (by simp[bm]) (ab)
+
+@[simp]
+theorem val_pred_head {V : Type} {P : V -> V -> Prop} {x : Nat × V} {xs : List (Nat × V)} :
+  val_pred (x :: xs) P →
+    ∀ k2, k2 ∈ xs -> x.1 ≠ k2.1 -> P x.2 k2.2 := by
+      intro vp
+      let ⟨q1, q2⟩ := val_pred_cons vp
+      exact q1
 
 @[simp]
 theorem val_pred_nil {V : Type} {P : V -> V -> Prop} :
@@ -757,9 +788,6 @@ def AssocMap.split_by (H : AssocMap V P) (Q : V -> Bool) : AssocMap V P × Assoc
   let R := H.filterV (¬ Q ·)
   (L, R)
 
--- def AssocMap.union (a b : AssocMap V P) : AssocMap V P:=
---   b.inner.foldl (fun acc x => acc.insert x.1 x.2) a
-
 def AssocMap.intersection [DecidableEq V] (a b : AssocMap V P) : AssocMap V P :=
   a.filter (fun x => x ∈ b)
 
@@ -768,16 +796,6 @@ instance : HasSubset (AssocMap V P) where
 
 instance [DecidableEq V] : Inter (AssocMap V P) where
   inter := AssocMap.intersection
-
--- instance : Union (AssocMap V P) where
---   union := AssocMap.union
-
--- instance : Coe (AssocMap V P) (List (Nat × V)) where
---   coe m := m.inner
-
--- instance [DecidableEq V] : Coe (AssocMap V P) (Set (Nat × V)) where
---   coe m := (m.inner.toFinset : Set _)
-
 
 theorem AssocMap.mem_inter_iff [DecidableEq V] {a b : AssocMap V P} {x : Nat × V} :
   x ∈ (a ∩ b) ↔ x ∈ a ∧ x ∈ b := by
@@ -802,104 +820,3 @@ theorem AssocMap.get_prod_of_mem_eq {m : AssocMap V P} {k : Nat} {v : V}
   m.get k pf = v := by
   simp[AssocMap.get_of_mem]
   exact km
-
--- theorem AssocMap.insert_filterK_true {m : AssocMap V P} {k : Nat} {v : V}
---   {Q : Nat -> Bool} (p : Q k) :
---   (m.insert k v).filterK P = (m.filterK P).insert k v := by
---   obtain ⟨H, wf⟩ := m
---   induction H with
---   | nil => simp[insert, insert_sorted, filterK, filter, p]
---   | cons x xs ih =>
---       simp at wf
---       obtain ⟨xok, wfxs⟩ := wf
---       simp[insert, insert_sorted, filterK, filter, filter_cons]
---       simp[AssocMap.eq_iff, filterK, filter, insert] at ih
---       by_cases xk: x.1 < k
---       case pos =>
---         simp[xk, filter_cons]
---         by_cases px : P x.1
---         case pos =>
---           simp[px]
---           simp[insert_sorted, xk]
---           apply ih wfxs
---         case neg =>
---           simp[px]
---           apply ih wfxs
---       case neg =>
---         by_cases xk' : x.1 = k
---         case pos =>
---           subst xk'
---           by_cases px : P x.1
---           case pos =>
---             simp[px, insert_sorted]
---           case neg =>
---             simp[px]
---             grind
---         case neg =>
---           simp[xk, xk']
---           by_cases px : P x.1
---           case pos =>
---             simp[filter_cons, insert_sorted, px]
---             by_cases pk : P k
---             case pos =>
---               simp[pk, xk, xk']
---             case neg =>
---               simp[pk, xk, xk']
---               aesop
---           case neg =>
---             simp[px, filter_cons]
---             by_cases pk : P k
---             case pos =>
---               simp[pk]
---               let Q := ih wfxs
---               rw[← Q]
---               unfold insert_sorted
---               cases xs with
---               | nil => simp[pk]
---               | cons y ys =>
---                 grind
---             case neg =>
---               simp[pk]
---               rw[← ih wfxs]
---               unfold insert_sorted
---               cases xs with
---               | nil => simp[pk]
---               | cons y ys =>
---                 grind
-
--- theorem AssocMap.insert_filterK_false {m : AssocMap V P} {k : Nat} {v : V}
---   {P : Nat -> Bool} (p : ¬ P k) :
---   (m.insert k v).filterK P = (m.filterK P) := by
---   obtain ⟨H, wf⟩ := m
---   induction H with
---   | nil => simp[insert, insert_sorted, filterK, filter, p]
---   | cons x xs ih =>
---       simp at wf
---       obtain ⟨xok, wfxs⟩ := wf
---       simp[insert, insert_sorted, filterK, filter, filter_cons]
---       simp[AssocMap.eq_iff, filterK, filter, insert] at ih
---       by_cases xk: x.1 < k
---       case pos =>
---         simp[xk, filter_cons]
---         by_cases px : P x.1
---         case pos =>
---           simp[px]
---           apply ih wfxs
---         case neg =>
---           simp[px]
---           apply ih wfxs
---       case neg =>
---         by_cases xk' : x.1 = k
---         case pos =>
---           subst xk'
---           simp[p]
---         case neg =>
---           simp[xk, xk', filter_cons, p]
-
--- @[simp]
--- theorem AssocMap.insert_filterK {m : AssocMap V} {k : Nat} {v : V}
---   {P : Nat -> Bool} :
---   (m.insert k v).filterK P = (if P k then (m.filterK P).insert k v else (m.filterK P)) := by
---   by_cases pk : P k
---   case pos => simp[pk, AssocMap.insert_filterK_true pk]
---   case neg => simp[pk, AssocMap.insert_filterK_false pk]

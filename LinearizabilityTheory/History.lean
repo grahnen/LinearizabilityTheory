@@ -4,10 +4,11 @@ import LinearizabilityTheory.AssocMap
 import Mathlib
 
 open List
+open Itv
 
 structure Value where
-  add : Itv
-  rmv : Itv
+  add : CItv
+  rmv : CItv
   wf : add.b < rmv.a
   deriving DecidableEq, Repr
 
@@ -28,10 +29,10 @@ abbrev Value.disj_timestamps (v1 v2 : Value) : Prop :=
 
 
 
-def Value.cover (V : Value) : Itv :=
+def Value.cover (V : Value) : OItv :=
   ⟨V.add.b, V.rmv.a, V.wf⟩
 
-theorem Value.before_compat_trans_self {v1 : Value} {i : Itv}
+theorem Value.before_compat_trans_self {v1 : Value} {i : CItv}
   (vi : v1.rmv≼i) : v1.add ≼ i := by
     simp[Itv.before_compat] at *
     apply Int.le_of_lt
