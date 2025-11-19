@@ -1,13 +1,6 @@
-# LinearizabilityTheory
+# Efficient Linearizability Monitoring
 
-## GitHub configuration
+This repository contains the formalized correctness proof of one of the algorithms presented in the paper
+[Efficient Linearizability Monitoring](https://dl.acm.org/doi/10.1145/3729328)
 
-To set up your new GitHub repository, follow these steps:
-
-* Under your repository name, click **Settings**.
-* In the **Actions** section of the sidebar, click "General".
-* Check the box **Allow GitHub Actions to create and approve pull requests**.
-* Click the **Pages** section of the settings sidebar.
-* In the **Source** dropdown menu, select "GitHub Actions".
-
-After following the steps above, you can remove this section from the README file.
+So far there is only a proof of correctness for the stack algorithm, which we considered to be the most difficult of them to both design and prove correct.
