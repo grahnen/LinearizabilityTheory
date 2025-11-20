@@ -1,7 +1,7 @@
 import Aesop
 import LinearizabilityTheory.ListExt
 import Mathlib
-
+namespace LinearizabilityTheory
 open List
 
 @[simp]
@@ -69,12 +69,14 @@ structure AssocMap (V : Type) (pred : V -> V -> Prop) where
 
 notation "⸨" X "⸩" => AssocMap.inner X
 
+namespace AssocMap
 variable {V : Type} {P : V -> V -> Prop}
 
 instance [BEq V] : BEq (AssocMap V P) where
   beq a b := a.inner == b.inner
 
-instance {V : Type} {P : V -> V -> Prop} : EmptyCollection (AssocMap V P) where
+instance instEmptyCollectionAssocMap {V : Type} {P : V -> V -> Prop} :
+  EmptyCollection (AssocMap V P) where
   emptyCollection := ⟨[], by simp [wf_map], by simp⟩
 
 instance : Membership (Nat × V) (AssocMap V P) where
@@ -86,7 +88,7 @@ def SubMap (a b : AssocMap V P) : Prop :=
   a.inner <+ b.inner
 
 @[simp]
-def SubMap.refl (a : AssocMap V P) : SubMap a a := by simp
+def SubMap_refl (a : AssocMap V P) : SubMap a a := by simp
 
 def insert_sorted (l : List (Nat × V)) (k : Nat) (v : V) : List (Nat × V) :=
   match l with
@@ -153,23 +155,23 @@ def insert_sorted_wf (l : List (Nat × V)) (k : Nat) (v : V) :
 -- def AssocMap.insert (m : AssocMap V P) (k : Nat) (v : V) : AssocMap V P :=
 --   ⟨insert_sorted m.inner k v, insert_sorted_wf m.inner k v m.wf⟩
 
-def AssocMap.get? (m : AssocMap V P) (k : Nat) : Option V :=
+def get? (m : AssocMap V P) (k : Nat) : Option V :=
   m.inner.find? (fun x => x.1 == k) >>= (·.snd)
 
 
-def AssocMap.values (m : AssocMap V P) : List V :=
+def values (m : AssocMap V P) : List V :=
   m.inner.map Prod.snd
 
-def AssocMap.keys (m : AssocMap V P) : List Nat :=
+def keys (m : AssocMap V P) : List Nat :=
   m.inner.map Prod.fst
 
 @[simp]
-theorem AssocMap.nil_values :
+theorem nil_values :
   (∅ : AssocMap V P).values = [] :=
   by simp[AssocMap.values, EmptyCollection.emptyCollection]
 
 
-def AssocMap.filter (m : AssocMap V P) (p : Nat × V → Bool) : AssocMap V P :=
+def filter (m : AssocMap V P) (p : Nat × V → Bool) : AssocMap V P :=
   let filtered := m.inner.filter p
   ⟨filtered, by
     simp[wf_map, filtered]
@@ -183,54 +185,46 @@ def AssocMap.filter (m : AssocMap V P) (p : Nat × V → Bool) : AssocMap V P :=
     apply m.pred_ok _ _ am bm ne
   ⟩
 
-def AssocMap.filterV (m : AssocMap V P) (p : V → Bool) : AssocMap V P :=
+def filterV (m : AssocMap V P) (p : V → Bool) : AssocMap V P :=
   m.filter (fun x => p x.2)
 
-def AssocMap.filterK (m : AssocMap V P) (p : Nat → Bool) : AssocMap V P :=
+def filterK (m : AssocMap V P) (p : Nat → Bool) : AssocMap V P :=
   m.filter (fun x => p x.1)
 
 
 
 
-variable {B : Type}
 
--- def AssocMap.mapV (m : AssocMap V P) (f : V → B) : AssocMap B :=
---   let mapped := m.inner.map (fun x => (x.1, f x.2))
---   ⟨mapped, by
---     simp [wf_map, mapped]
---     apply List.Pairwise.map
---     · aesop
---     · rw[← pairwise_map]; exact m.wf
---   ⟩
 
-def AssocMap.submap (a b : AssocMap V P) : Prop :=
+
+def submap (a b : AssocMap V P) : Prop :=
   a.inner <+ b.inner
 
 notation a "<@" b => ⸨ a ⸩ <+ ⸨ b ⸩
 
 @[simp]
-def AssocMap.filter_submap {p : Nat × V → Bool} (m : AssocMap V P) :
+def filter_submap {p : Nat × V → Bool} (m : AssocMap V P) :
   m.filter p <@ m := by
   unfold AssocMap.filter
   simp [List.filter_sublist]
 
 @[simp]
-def AssocMap.filterV_submap {p : V → Bool} (m : AssocMap V P) :
+def filterV_submap {p : V → Bool} (m : AssocMap V P) :
   m.filterV p <@ m := by
   simp[AssocMap.filterV]
 
 @[simp]
-def AssocMap.filterK_submap {p : Nat → Bool} (m : AssocMap V P) :
+def filterK_submap {p : Nat → Bool} (m : AssocMap V P) :
   m.filterK p <@ m := by
   simp[AssocMap.filterK]
 
 @[simp]
-def AssocMap.nil_submap (l : AssocMap V P) : (∅ : AssocMap V P) <@ l := by
+def nil_submap (l : AssocMap V P) : (∅ : AssocMap V P) <@ l := by
   simp [EmptyCollection.emptyCollection]
 
 
 @[simp]
-def AssocMap.filterK_mem_self (m : AssocMap V P) :
+def filterK_mem_self (m : AssocMap V P) :
   m.filterK (fun k => k ∈ m.keys) = m := by
     obtain ⟨inner, wf⟩ := m
     induction inner with
@@ -245,7 +239,7 @@ def AssocMap.filterK_mem_self (m : AssocMap V P) :
         exists v2
 
 @[simp]
-def AssocMap.filterK_mem_empty (m : AssocMap V P) :
+def filterK_mem_empty (m : AssocMap V P) :
   m.filterK (fun v => v ∉ m.keys) = ∅ := by
     obtain ⟨inner, wf⟩ := m
     induction inner with
@@ -261,20 +255,20 @@ def AssocMap.filterK_mem_empty (m : AssocMap V P) :
         exists v2
 
 @[simp]
-def AssocMap.length (m : AssocMap V P) : Nat :=
+def length (m : AssocMap V P) : Nat :=
   m.inner.length
 
-def AssocMap.separate_pred (l : AssocMap V P) (p : V → Bool) : AssocMap V P × AssocMap V P :=
+def separate_pred (l : AssocMap V P) (p : V → Bool) : AssocMap V P × AssocMap V P :=
   let L := l.filterV p
   let R := l.filterV (fun x => ¬ p x)
   (L, R)
 
 @[simp]
-theorem AssocMap.separate_pred_sublist_l (l : AssocMap V P) (p : V → Bool) :
+theorem separate_pred_sublist_l (l : AssocMap V P) (p : V → Bool) :
   (l.separate_pred p).1 <@ l := by simp[separate_pred]
 
 @[simp]
-theorem AssocMap.separate_pred_sublist_r (l : AssocMap V P) (p : V → Bool) :
+theorem separate_pred_sublist_r (l : AssocMap V P) (p : V → Bool) :
   (l.separate_pred p).2 <@ l := by simp [separate_pred]
 
 
@@ -302,7 +296,7 @@ theorem pw_skip {V} {x : Nat × V} {xs} {P : Nat × V -> Nat × V -> Prop}
 
 
 @[simp]
-theorem AssocMap.separate_pred_length (l : AssocMap V P) (p : V → Bool) :
+theorem separate_pred_length (l : AssocMap V P) (p : V → Bool) :
   (l.separate_pred p).1.length + (l.separate_pred p).2.length = l.length := by
   obtain ⟨inner, wf, pred_ok⟩ := l
   induction inner with
@@ -315,18 +309,18 @@ theorem AssocMap.separate_pred_length (l : AssocMap V P) (p : V → Bool) :
     by_cases pa: (p a.2)
       <;> simp +arith[pa, filterV, filter, J]
 
-theorem AssocMap.eq_iff {m1 m2 : AssocMap V P} :
+theorem eq_iff {m1 m2 : AssocMap V P} :
   m1 = m2 ↔ m1.inner = m2.inner := by
   obtain ⟨l1, wf1⟩ := m1
   obtain ⟨l2, wf2⟩ := m2
   simp
 
-theorem AssocMap.mem_iff (m : AssocMap V P) (a : Nat × V) :
+theorem mem_iff (m : AssocMap V P) (a : Nat × V) :
   a ∈ m ↔ a ∈ m.inner := by
     aesop
 
 @[simp]
-theorem AssocMap.mem_cons (x a : Nat × V) (as : List (Nat × V)) {wf wf'} {pred_ok pred_ok'} :
+theorem mem_cons (x a : Nat × V) (as : List (Nat × V)) {wf wf'} {pred_ok pred_ok'} :
   x ∈ ({ inner := a :: as, wf, pred_ok } : AssocMap V P) ↔
   (x = a ∨ x ∈ ({inner := as, wf := wf', pred_ok := pred_ok'} : AssocMap V P)):= by
     simp [AssocMap.mem_iff]
@@ -335,40 +329,40 @@ instance [BEq V] [LawfulBEq V] {m : AssocMap V P} {a : Nat × V} : Decidable (a 
   instDecidableMemOfLawfulBEq a m.inner
 
 @[simp]
-theorem AssocMap.nil_empty :
+theorem nil_empty :
   (⟨[], by simp, by simp⟩ : AssocMap V P) = ∅ := by
     aesop
 
 @[simp]
-theorem AssocMap.nil_toList {V} {P} :
+theorem nil_toList {V} {P} :
   ⸨(∅ : AssocMap V P)⸩ = [] := by
-    rw[← AssocMap.nil_empty]
+    rw[← nil_empty]
 
 @[simp]
-theorem AssocMap.nil_inner {V : Type} {P} :
+theorem nil_inner {V : Type} {P} :
   ⸨(∅ : AssocMap V P)⸩ = [] := by
     simp
 
 @[simp]
-theorem AssocMap.nil_mem (a : Nat × V) :
+theorem nil_mem (a : Nat × V) :
   a ∉ (∅ : AssocMap V P) := by
   rw[← AssocMap.nil_empty, AssocMap.mem_iff]
   simp
 
 @[simp]
-theorem AssocMap.nil_keys {V : Type} {P} :
+theorem nil_keys {V : Type} {P} :
   (∅ : AssocMap V P).keys = [] := by
     rw[← AssocMap.nil_empty, keys]
     simp
 
 @[simp]
-theorem AssocMap.eq_nil_iff_forall_not_mem {H : AssocMap V P} :
+theorem eq_nil_iff_forall_not_mem {H : AssocMap V P} :
   H = ∅ ↔ (∀ a, a ∉ ⸨H⸩) := by
     rw[AssocMap.eq_iff]
     exact List.eq_nil_iff_forall_not_mem
 
 @[simp]
-theorem AssocMap.eq_nil_iff_forall_pair_not_mem {H : AssocMap V P} :
+theorem eq_nil_iff_forall_pair_not_mem {H : AssocMap V P} :
   H = ∅ ↔ (∀ a b, (a,b) ∉ ⸨H⸩) := by
     rw[AssocMap.eq_iff]
     apply Iff.intro
@@ -382,7 +376,7 @@ theorem AssocMap.eq_nil_iff_forall_pair_not_mem {H : AssocMap V P} :
       apply h a.1 a.2
 
 @[simp]
-theorem AssocMap.mem_vals {m : AssocMap V P} {v : V} :
+theorem mem_vals {m : AssocMap V P} {v : V} :
   v ∈ m.values ↔ ∃ k, (k, v) ∈ m := by
     obtain ⟨inner, wf⟩ := m
     induction inner with
@@ -391,7 +385,7 @@ theorem AssocMap.mem_vals {m : AssocMap V P} {v : V} :
       simp[AssocMap.values, AssocMap.mem_iff]
       aesop
 
-theorem AssocMap.mem_keys {m : AssocMap V P} {k : Nat} :
+theorem mem_keys {m : AssocMap V P} {k : Nat} :
   k ∈ m.keys ↔ ∃ v, (k, v) ∈ m := by
     obtain ⟨inner, wf⟩ := m
     induction inner with
@@ -413,28 +407,28 @@ theorem AssocMap.mem_keys {m : AssocMap V P} {k : Nat} :
 
 
 @[simp]
-theorem AssocMap.length_keys (h : AssocMap V P) :
+theorem length_keys (h : AssocMap V P) :
   h.length = h.keys.length := by
   simp [AssocMap.keys, length, List.length_map]
 
 @[simp]
-theorem AssocMap.length_vals (h : AssocMap V P) :
+theorem length_vals (h : AssocMap V P) :
   h.length = h.values.length := by
   simp [AssocMap.values, length, List.length_map]
 
 
 @[simp]
-def AssocMap.head (m : AssocMap V P) :
+def head (m : AssocMap V P) :
   ⸨ m ⸩ ≠ [] → Nat × V :=
   m.inner.head
 
 @[simp]
-def AssocMap.head? (m : AssocMap V P) :
+def head? (m : AssocMap V P) :
   Option (Nat × V) :=
   m.inner.head?
 
 @[simp]
-theorem AssocMap.mem_of_head? (m : AssocMap V P) {a : Nat × V} :
+theorem mem_of_head? (m : AssocMap V P) {a : Nat × V} :
   m.head? = some a → a ∈ m := by
   intro h
   simp [AssocMap.head?] at h
@@ -456,7 +450,7 @@ theorem List.mem_of_sublist
       | inr h => simp[h, ih]
 
 @[simp]
-theorem AssocMap.get?_of_mem {l : AssocMap V P} {x : Nat × V} :
+theorem get?_of_mem {l : AssocMap V P} {x : Nat × V} :
   l.get? x.1 = some x.2 ↔ x ∈ l := by
   obtain ⟨inner, wf, pred_ok⟩ := l
   induction inner with
@@ -497,12 +491,12 @@ theorem AssocMap.get?_of_mem {l : AssocMap V P} {x : Nat × V} :
 
 
 @[simp]
-theorem AssocMap.get?_of_mem' {l : AssocMap V P} {k : Nat} {v : V} :
+theorem get?_of_mem' {l : AssocMap V P} {k : Nat} {v : V} :
   l.get? k = some v ↔ (k, v) ∈ l:= by
-  rw[← AssocMap.get?_of_mem]
+  rw[← get?_of_mem]
 
 
-theorem AssocMap.get?_none_iff {l : AssocMap V P} {k : Nat} :
+theorem get?_none_iff {l : AssocMap V P} {k : Nat} :
   l.get? k = none ↔ ∀ v, (k, v) ∉ l := by
   apply Iff.intro
   · simp[AssocMap.get?]
@@ -517,7 +511,7 @@ theorem AssocMap.get?_none_iff {l : AssocMap V P} {k : Nat} :
     rw[AssocMap.get?_of_mem'] at eq
     exact h v eq
 
-def AssocMap.get (m : AssocMap V P) (k : Nat) (km : k ∈ m.keys) : V :=
+def get (m : AssocMap V P) (k : Nat) (km : k ∈ m.keys) : V :=
   match mg: m.get? k with
   | some v => v
   | none => by
@@ -527,7 +521,7 @@ def AssocMap.get (m : AssocMap V P) (k : Nat) (km : k ∈ m.keys) : V :=
       grind
 
 @[simp]
-theorem AssocMap.get_of_mem {l : AssocMap V P} {k : Nat} {v : V} (km : k ∈ l.keys) :
+theorem get_of_mem {l : AssocMap V P} {k : Nat} {v : V} (km : k ∈ l.keys) :
   l.get k km = v ↔ (k, v) ∈ l := by
   simp[AssocMap.get]
   simp[mem_keys] at km
@@ -537,7 +531,7 @@ theorem AssocMap.get_of_mem {l : AssocMap V P} {k : Nat} {v : V} (km : k ∈ l.k
   grind
 
 @[simp]
-theorem AssocMap.get_mem {m : AssocMap V P} {k : Nat} {v : V} {pf} :
+theorem get_mem {m : AssocMap V P} {k : Nat} {v : V} {pf} :
   (k, v) ∈ m ->
   m.get k pf = v := by
   intro kv
@@ -545,7 +539,7 @@ theorem AssocMap.get_mem {m : AssocMap V P} {k : Nat} {v : V} {pf} :
   exact kv
 
 @[simp]
-theorem AssocMap.get_eq_get? (m : AssocMap V P) (k : Nat) (km : k ∈ m.keys) :
+theorem get_eq_get? (m : AssocMap V P) (k : Nat) (km : k ∈ m.keys) :
   (m.get? k) = some (m.get k km):= by
   simp[mem_keys] at km
   obtain ⟨v, mem⟩ := km
@@ -553,7 +547,7 @@ theorem AssocMap.get_eq_get? (m : AssocMap V P) (k : Nat) (km : k ∈ m.keys) :
   rw[H]
   simp[mem]
 
-def AssocMap.tail? (m : AssocMap V P) : Option (AssocMap V P) :=
+def tail? (m : AssocMap V P) : Option (AssocMap V P) :=
   let j := m.wf
   let q := m.pred_ok
   match h: m.inner with
@@ -561,7 +555,7 @@ def AssocMap.tail? (m : AssocMap V P) : Option (AssocMap V P) :=
   | (x :: xs) => some ⟨xs, by rw[h] at j; exact wf_skip j, by rw[h] at q; exact pred_skip q⟩
 
 @[induction_eliminator]
-theorem AssocMap.induct {Q : AssocMap V P -> Prop} :
+theorem induct {Q : AssocMap V P -> Prop} :
   (nil: Q ∅) ->
   (cons: ∀ x l wfl wfxl ok1 ok2, Q ⟨l, wfl, ok1⟩ -> Q (⟨x :: l, wfxl, ok2⟩)) ->
   (m : AssocMap V P) -> Q m := by
@@ -576,13 +570,13 @@ theorem AssocMap.induct {Q : AssocMap V P -> Prop} :
       let wfxs := @ih v ks
       apply h2 a _ v _ _ _ wfxs
 
-theorem AssocMap.mem_inj (m : AssocMap V P) {k : Nat} {v v' : V} :
+theorem mem_inj (m : AssocMap V P) {k : Nat} {v v' : V} :
   (k, v) ∈ m -> (k, v') ∈ m -> v = v' := by
   intro h1 h2
   rw[← AssocMap.get?_of_mem] at h1 h2
   aesop
 
-theorem AssocMap.cases (m : AssocMap V P) :
+theorem cases (m : AssocMap V P) :
   m = ∅ ∨ ∃ k v tl pf ok, m = ⟨(k, v) :: tl, pf, ok⟩ := by
   obtain ⟨inner, wf, ok⟩ := m
   cases inner with
@@ -597,14 +591,14 @@ theorem AssocMap.cases (m : AssocMap V P) :
 
 
 @[simp]
-theorem AssocMap.filter_of_filter {m : AssocMap V P} {p : Nat × V → Bool} :
+theorem filter_of_filter {m : AssocMap V P} {p : Nat × V → Bool} :
   ⸨m.filter p⸩ = ⸨m⸩.filter p := by
   simp[filter]
 
 variable {Q : Nat × V -> Bool} {k : Nat} {q : V}
 
 @[simp]
-theorem AssocMap.get?_of_filter {m : AssocMap V P} :
+theorem get?_of_filter {m : AssocMap V P} :
   (m.filter Q).get? k = some q -> m.get? k = some q := by
   unfold get?
   simp
@@ -632,23 +626,23 @@ theorem AssocMap.get?_of_filter {m : AssocMap V P} :
 
 
 @[simp]
-theorem AssocMap.nil_filter :
+theorem nil_filter :
   (∅ : AssocMap V P).filter Q = ∅ := by
   rw[EmptyCollection.emptyCollection, instEmptyCollectionAssocMap]
   simp
 
 @[simp]
-theorem AssocMap.nil_filterV {Q : V -> Bool}:
+theorem nil_filterV {Q : V -> Bool}:
   (∅ : AssocMap V P).filterV Q = ∅ := by
   simp[AssocMap.filterV]
 
 @[simp]
-theorem AssocMap.nil_filterK {Q : Nat -> Bool} :
+theorem nil_filterK {Q : Nat -> Bool} :
   (∅ : AssocMap V P).filterK Q = ∅ := by
   simp[AssocMap.filterK]
 
 @[simp]
-theorem AssocMap.get?_of_filter_eq {m : AssocMap V P} :
+theorem get?_of_filter_eq {m : AssocMap V P} :
   (m.filter Q).get? k = (m.get? k) >>= fun h => if Q (k, h) then some h else none := by
   obtain ⟨m, wf, ok⟩ := m
   induction m with
@@ -689,19 +683,22 @@ theorem AssocMap.get?_of_filter_eq {m : AssocMap V P} :
 
 
 
-def AssocMap.argmin {K : Type} [Preorder K] [DecidableLT K] (m : AssocMap V P) (f : V -> K)
+def argmin {K : Type} [Preorder K] [DecidableLT K] (m : AssocMap V P) (f : V -> K)
   : Option (Nat × V) :=
   m.inner.argmin (fun x => f x.2)
 
 @[simp]
-theorem AssocMap.mem_of_argmin {K : Type} [Preorder K] [DecidableLT K]
+theorem mem_of_argmin {K : Type} [Preorder K] [DecidableLT K]
   {a : Nat × V} {f : V -> K} (m : AssocMap V P) :
   a ∈ m.argmin f → a ∈ m := by
   simp[AssocMap.argmin]
   apply List.argmin_mem
 
+
+
+
 @[simp]
-theorem AssocMap.count_le_one {m : AssocMap V P} :
+theorem count_le_one {m : AssocMap V P} :
   ∀ v, m.keys.count v ≤ 1 := by
   intro v
   induction m using AssocMap.induct with
@@ -725,7 +722,7 @@ theorem AssocMap.count_le_one {m : AssocMap V P} :
 
 
 @[simp]
-theorem AssocMap.split_not_mem {m : AssocMap V P} {s t : List (Nat × V)} {x : V} :
+theorem split_not_mem {m : AssocMap V P} {s t : List (Nat × V)} {x : V} :
   ⸨m⸩ = s ++ (k, x) :: t -> k ∉ s.map Prod.fst ∧ k ∉ t.map Prod.fst := by
   intro h
   obtain ⟨inner, wf⟩ := m
@@ -746,7 +743,7 @@ theorem AssocMap.split_not_mem {m : AssocMap V P} {s t : List (Nat × V)} {x : V
 
 
 @[simp]
-theorem AssocMap.split_count_left_zero {m : AssocMap V P} {s t : List (Nat × V)} {v : V} :
+theorem split_count_left_zero {m : AssocMap V P} {s t : List (Nat × V)} {v : V} :
   ⸨m⸩ = s ++ (k, v) :: t -> (s.map Prod.fst).count k = 0 := by
   intro eq
   let ⟨l, r⟩ := AssocMap.split_not_mem eq
@@ -754,12 +751,12 @@ theorem AssocMap.split_count_left_zero {m : AssocMap V P} {s t : List (Nat × V)
   aesop
 
 
-theorem AssocMap.mem_filter {h : AssocMap V P} {F : Nat × V -> Bool} {x : Nat × V} :
+theorem mem_filter {h : AssocMap V P} {F : Nat × V -> Bool} {x : Nat × V} :
   x ∈ (h.filter F) ↔ x ∈ h ∧ F x := by
   simp[AssocMap.filter, AssocMap.mem_iff]
 
 @[simp]
-theorem AssocMap.key_get_mem {m : AssocMap V P} {k : Nat} {em} :
+theorem key_get_mem {m : AssocMap V P} {k : Nat} {em} :
   (k, m.get k em) ∈ m := by
   simp[mem_keys] at em
   obtain ⟨v, vM⟩ := em
@@ -770,7 +767,7 @@ theorem AssocMap.key_get_mem {m : AssocMap V P} {k : Nat} {em} :
   simp[gkv, vM]
 
 @[simp]
-theorem AssocMap.get_of_filter_eq
+theorem get_of_filter_eq
   {m : AssocMap V P} {k : Nat} {P : Nat × V -> Bool}
   {em} {em'}
   :
@@ -783,12 +780,12 @@ theorem AssocMap.get_of_filter_eq
   rw[← veq, Pv]
 
 
-def AssocMap.split_by (H : AssocMap V P) (Q : V -> Bool) : AssocMap V P × AssocMap V P:=
+def split_by (H : AssocMap V P) (Q : V -> Bool) : AssocMap V P × AssocMap V P:=
   let L := H.filterV Q
   let R := H.filterV (¬ Q ·)
   (L, R)
 
-def AssocMap.intersection [DecidableEq V] (a b : AssocMap V P) : AssocMap V P :=
+def intersection [DecidableEq V] (a b : AssocMap V P) : AssocMap V P :=
   a.filter (fun x => x ∈ b)
 
 instance : HasSubset (AssocMap V P) where
@@ -797,13 +794,13 @@ instance : HasSubset (AssocMap V P) where
 instance [DecidableEq V] : Inter (AssocMap V P) where
   inter := AssocMap.intersection
 
-theorem AssocMap.mem_inter_iff [DecidableEq V] {a b : AssocMap V P} {x : Nat × V} :
+theorem mem_inter_iff [DecidableEq V] {a b : AssocMap V P} {x : Nat × V} :
   x ∈ (a ∩ b) ↔ x ∈ a ∧ x ∈ b := by
   simp[Inter.inter, AssocMap.intersection]
   simp[mem_filter]
 
 
-theorem AssocMap.separate_disjoint [DecidableEq V] {m : AssocMap V P} {p : V → Bool} :
+theorem separate_disjoint [DecidableEq V] {m : AssocMap V P} {p : V → Bool} :
   let (L, R) := m.separate_pred p
   L ∩ R = ∅ := by
   simp[AssocMap.separate_pred, AssocMap.filterV, AssocMap.filter]
@@ -815,8 +812,34 @@ theorem AssocMap.separate_disjoint [DecidableEq V] {m : AssocMap V P} {p : V →
   simp[px] at npy
 
 @[simp]
-theorem AssocMap.get_prod_of_mem_eq {m : AssocMap V P} {k : Nat} {v : V}
+theorem get_prod_of_mem_eq {m : AssocMap V P} {k : Nat} {v : V}
   (km : (k, v) ∈ m) {pf : k ∈ m.keys} :
   m.get k pf = v := by
   simp[AssocMap.get_of_mem]
   exact km
+
+@[simp]
+theorem mem_keys_of_mem {H : AssocMap V P} {k : Nat} {v : V} (kv : (k, v) ∈ H) :
+  k ∈ H.keys := by
+  simp[mem_keys]
+  use v
+
+@[simp]
+theorem neq_head_mem_tl {V} {P} {as : List (Nat × V)} {k1 k2 : Nat} {v : V}
+  {wf} {pred_ok} (neq : k1 ≠ k2)
+  (mem : k2 ∈ ({ inner := (k1, v) :: as, wf, pred_ok } : AssocMap V P).keys) :
+  k2 ∈ ({ inner := as, wf := wf_skip wf, pred_ok := pred_skip pred_ok } : AssocMap V P).keys := by
+  simp[AssocMap.mem_keys, mem_iff, neq.symm] at mem ⊢
+  exact mem
+
+@[simp]
+theorem mem_get {V} {P} {as : List (Nat × V)} {k : Nat} {v : V}
+  {wf} {ok} (mm : k ∈ (AssocMap.mk as wf ok).keys)
+  (mem : (k, v) ∈ as) :
+  ({ inner := as, wf := wf , pred_ok := ok } : AssocMap V P).get k mm = v := by
+  aesop
+
+
+
+end AssocMap
+end LinearizabilityTheory

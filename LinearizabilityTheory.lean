@@ -3,3 +3,4 @@ import LinearizabilityTheory.Basic
 import LinearizabilityTheory.AssocMap
 import LinearizabilityTheory.Interval
 import LinearizabilityTheory.CompatAlg
+import LinearizabilityTheory.AlgCorrect
